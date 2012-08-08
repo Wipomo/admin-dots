@@ -1,0 +1,6 @@
+#!/bin/sh -xe
+sudo useradd -m -G hax0rs $1
+sudoedit /etc/ssh/sshd_config /usr/local/etc/wemux.conf
+sudo /etc/init.d/sshd restart
+sudo -u $1 vim ~$1/.ssh/authorized_keys +set\ tw=0
+sudo chmod 600 $_

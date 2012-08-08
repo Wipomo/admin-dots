@@ -13,30 +13,30 @@ events {
 http {
   include       mime.types;
   default_type  application/octet-stream;
-  
+
   log_format    main  '$remote_addr - $remote_user [$time_local] $request '
                       '"$status" $body_bytes_sent "$http_referer" '
                       '"$http_user_agent" "$http_x_forwarded_for"';
-  
+
   access_log    <%= config['log_path'] || 'logs' %>/access.log  main;
   error_log     <%= config['log_path'] || 'logs' %>/error.log   debug;
-  
+
   # no sendfile on OS X
   sendfile      on;
-  
+
   # These are good default values.
   tcp_nopush    on;
   tcp_nodelay   off;
-  
-  # output compression saves bandwidth 
+
+  # output compression saves bandwidth
   gzip              on;
   gzip_http_version 1.0;
   gzip_comp_level   2;
   gzip_proxied      any;
   gzip_types        text/plain text/html text/css application/x-javascript text/xml application/xml application/xml+rss text/javascript;
-  
+
   server_names_hash_bucket_size 128;
-  
+
   # upstream mongrels
   <% Array(config['sites']).each do |name, site| %>
     <% next unless site['upstream'] %>
@@ -46,31 +46,32 @@ http {
     <% end %>
     }
   <% end %>
-  
+
   # Sites
   <% %w(sites ssl_sites).each do |site_type| %>
-  
+
   <% Array(config[site_type]).each do |name, site| %>
   # the server directive is nginx's virtual host directive.
   server {
-      
+
     <% if site['ssl'] %>
     listen <%= site['listen'] || '443' %>
     ssl on;
-    
+
     # path to your certificate
     ssl_certificate <%= site['ssl']['cert'] %>;
-    
+
     # path to your ssl key
     ssl_certificate_key <%= site['ssl']['key'] %>;
     <% else %>
     # port to listen on. Can also be set to an IP:PORT
     listen       80;
     <% end %>
-    
+
     # sets the domain[s] that this vhost server requests for
     <%  unless site['www'] == 'no'
-          hosts = (site['host'] || site['hosts']).split
+          p site['hosts']
+          hosts = (site['hosts']).split
           server_names = hosts.inject([]) do |memo, host|
             memo << host
             memo << "www.#{host}" unless host.match(/\Awww\./) or hosts.include?("www.#{host}")
@@ -81,16 +82,16 @@ http {
         end
     %>
     server_name  <%= server_names.join(' ') %>;
-    
+
     # doc root
     root <%= (config['root'][ site['root'] || 'default' ] || site['root']) % name %>;
-    
+
     # vhost specific access log
     access_log  <%= config['log_path'] || 'logs' %>/<%= name %>.access.log  main;
-    
+
     #Set the max size for file uploads to 50Mb
     client_max_body_size  50M;
-    
+
     # this rewrites all the requests to the maintenance.html
     # page if it exists in the doc root. This is for capistrano's
     # disable web task
@@ -98,7 +99,7 @@ http {
       rewrite  ^(.*)$  /maintenance.html last;
       break;
     }
-    
+
     # Site Aliases
     <% if site['alias'] == 'all' %>
     if ($host != "<%= site['host'].split.first %>") {
@@ -118,31 +119,31 @@ http {
       break;
     }
     <% end %>
-    
+
     location / {
       <% Array(site['rewrite'] || site['rewrites']).each do |rewrite, rule| %>
       rewrite <%= rewrite %> <%= rule %> break;
       <% end %>
-      
+
       # Redirects
       <% Array(site['redirect'] || site['redirects'] || site['301s']).each do |regex, destination| %>
       rewrite <%= regex %> /<%= destination %> permanent;
       <% end %>
-      
+
       <% Array(site['feedburner']).each do |feed, burner| %>
         if ($http_user_agent !~ FeedBurner) {
           rewrite <%= feed %> http://feeds.feedburner.com/<%= burner %> break;
         }
       <% end %>
-      
+
       <% if site['auth_file'] %>
       auth_basic            "<%= name %> requires credentials.";
       auth_basic_user_file  <%= site['auth_file'] %>;
       <% end %>
-      
+
       # needed to forward user's IP address to rails
       proxy_set_header  X-Real-IP  $remote_addr;
-      
+
       # needed for HTTPS
       proxy_set_header  X-Forwarded-For $proxy_add_x_forwarded_for;
       proxy_set_header Host $http_host;
@@ -152,32 +153,32 @@ http {
       # set X-FORWARDED_PROTO so ssl_requirement plugin works
       proxy_set_header X-FORWARDED_PROTO https;
       <% end %>
-      
+
       # If the file exists as a static file serve it directly without
       # running all the other rewite tests on it
-      if (-f $request_filename) { 
-        break; 
+      if (-f $request_filename) {
+        break;
       }
-      
+
       # check for index.html for directory index
-      # if its there on the filesystem then rewite 
+      # if its there on the filesystem then rewite
       # the url to add /index.html to the end of it
       # and then break to send it to the next config rules.
       if (-f $request_filename/index.html) {
         rewrite (.*) $1/index.html break;
       }
-      
+
       # this is the meat of the rails page caching config
       # it adds .html to the end of the url and then checks
       # the filesystem for that file. If it exists, then we
-      # rewite the url to have explicit .html on the end 
+      # rewite the url to have explicit .html on the end
       # and then send it on its way to the next config rule.
-      # if there is no file on the fs then it sets all the 
+      # if there is no file on the fs then it sets all the
       # necessary headers and proxies to our upstream mongrels
       if (-f $request_filename.html) {
         rewrite (.*) $1.html break;
       }
-      
+
       <% if site['upstream'] %>
       if (!-f $request_filename) {
         proxy_pass http://<%= name %>;
@@ -185,16 +186,16 @@ http {
       }
       <% end %>
     }
-    
+
     <% if site['404_not_found'] %>
     error_page   404    <%= site['404_not_found'] %>;
     <% end %>
-    
+
     error_page   500 502 503 504  <%= site['50x_error_page'] || '/50x.html' %>;
     location = /50x.html {
       root   html;
     }
-    
+
     <% if site['prevent_hotlinking'] %>
     valid_referers none blocked <%= server_names.join(' ') %>;
     <% site['prevent_hotlinking'].split.each do |type| %>
@@ -212,13 +213,13 @@ http {
     }
     <% end %>
     <% end %>
-    
+
     <% Array(site['location'] || site['locations']).each do |path, setting| %>
     location <%= path %> {
       <%= setting %>
     }
     <% end %>
-    
+
   }
   <% end # site %>
   <% end # site_type %>

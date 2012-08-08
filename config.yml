@@ -1,0 +1,103 @@
+# These set various options for nginx. more to come.
+user: deploy
+group: deploy
+pid_path: /var/run
+log_path: /var/log/nginx
+workers: 6
+
+# This defines the default roots and alternate roots.
+# The name (or key) of your site will be sprintf'd with the below root.
+root:
+  rails: /var/apps/%s/current/public
+  default: /var/www/%s/current/web
+
+# All your vhosts.
+sites:
+  # serves static html from /var/www/placeholders/current/web
+  placeholders:
+    # "host" or "hosts": should be obvious
+    # by default will generate 'www' hosts for each entry
+    # add 'www: no' to override this behaviour
+    hosts: example.com example.org another-example.com example.net yet-another-example.com
+
+  # serves static html from /var/www/static_site/current/web
+  static_site:
+    hosts: static.com static.net static.org
+
+    # values for the "alias" key:
+    #   'all': redirects all hosts after the first to the first host
+    #   'none': create no redirects for any hostname
+    #   'www': redirect any domain not starting with 'www' to www.domain.etc
+    #   default: redirect 'www' hostnames to the non-'www' version
+    # in this example %w(www.static.com static.net www.static.net static.org www.static.org) will each redirect to static.com
+    alias: all
+
+    # Specify that files of a certain type should only be served if the referer
+    # is "none", "blocked" (some proxies set this), or among your hostnames
+    # specified in "hosts" (including any auto-generated 'www' hosts)
+    # Just a list of file extensions, 'images' auto-expands to 'jpg jpeg gif png'
+    prevent_hotlinking: images swf
+
+    # redirect, redirects, 301s:
+    # hash of regex patterns to match and rewrite rules to go with.
+    # will return a '301 Permanent' redirect.
+    301s:
+      '^/old_url.*': '/new_url'
+      '/old_categories/(.*)': '/$1'
+      '^/info/.*': 'info'
+      '^/info.html': 'info'
+
+    # specify the location of the 404 page.
+    # This will not be set if this value is not included.
+    404_not_found: /404.html
+
+  rails_site:
+    hosts: proxy.com proxied.com
+
+    # two upstream servers to proxy to
+    # you can do single upstream servers with "upstream: 127.0.0.1:8000"
+    upstream:
+      - 127.0.0.1:8000
+      - 127.0.0.1:8001
+
+    # like before, aliases everything to 'proxy.com'
+    alias: all
+
+    # serve out of the 'rails' root
+    root: rails
+
+    # normal rewrites, specified as a hash.
+    rewrites:
+      '^foo': bar
+
+    # redirects all except for feedburner to feeds.feedburner.com/foo
+    feedburner:
+      '^/articles.atom': my_rails_site
+
+    # location of the error page for 500-class errors
+    50x_error_page: /50x.html
+
+  # other options:
+  # specifies the path to an htpasswd-style authorization file
+  #   auth_file: /path/to/an/htpasswd
+  # setting this will not generate 'www' hostnames for your hosts
+  #   www: no
+
+# You may also specify https hosts
+ssl_sites:
+  secure_rails_site:
+    # ssl configuration
+    ssl:
+      key: /path/to/ssl.key
+      cert: /path/to/ssl.crt
+    # SSL only allows one vhost per IP this can be solved if you have multiple IPs.
+    listen: 10.10.10.1:443
+    # This proxies to our same upstream servers as the 'rails_site' entry above.
+    upstream:
+      - 127.0.0.1:8000
+      - 127.0.0.1:8001
+    alias: all
+    host: proxy.com
+    root: rails
+    www: no
+

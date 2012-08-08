@@ -1,2 +1,2 @@
-#! /usr/bin/env ruby
+#!/usr/bin/env ruby
 load File.dirname(__FILE__) + '/../lib/nginx_config_generator.rb'
